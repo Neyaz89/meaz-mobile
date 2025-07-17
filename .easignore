@@ -1,0 +1,23 @@
+# Ignore system and user folders
+AppData/
+Documents/
+Downloads/
+Favorites/
+Links/
+Music/
+OneDrive/
+Pictures/
+Saved Games/
+Searches/
+Videos/
+
+# Ignore node and git folders
+node_modules/
+.git/
+.expo/
+.vscode/
+.DS_Store
+
+# Ignore other hidden files
+*.log
+*.tmp 
