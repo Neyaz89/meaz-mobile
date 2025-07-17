@@ -148,6 +148,11 @@ android {
 }
 
 dependencies {
+    configurations.all {
+        exclude group: 'com.android.support'
+        exclude group: 'com.android.support', module: 'support-compat'
+        exclude group: 'com.android.support', module: 'versionedparcelable'
+    }
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android") {
         exclude group: 'com.android.support'
