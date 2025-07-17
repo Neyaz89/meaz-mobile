@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Meaz",
-    "slug": "meaz-mobile",
+    "slug": "meaz-mobile-v2",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,12 +12,17 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.meaz.mobile",
+      "package": "com.meaz.mobilev2",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "manifest": {
+        "application": {
+          "tools:replace": "android:appComponentFactory"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
@@ -39,7 +44,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "cafe2a65-4863-4388-9dd3-5d14307d634f"
+        "projectId": "11892149-669c-409d-9310-13c025a3b77c"
       }
     }
   }
