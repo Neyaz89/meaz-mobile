@@ -35,22 +35,3 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
-
-subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            project.android {
-                configurations.all {
-                    resolutionStrategy.eachDependency { details ->
-                        if (details.requested.group == 'com.android.support') {
-                            details.useVersion "28.0.0"
-                            details.because "Force all support libraries to same version"
-                        }
-                    }
-                    exclude group: 'com.android.support', module: 'support-compat'
-                    exclude group: 'com.android.support', module: 'versionedparcelable'
-                }
-            }
-        }
-    }
-}
