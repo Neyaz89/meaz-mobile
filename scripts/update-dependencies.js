@@ -64,6 +64,7 @@ const updatedPackageJson = {
     "react-native-gesture-handler": "~2.24.0",
     "react-native-gifted-chat": "^2.8.1",
     "react-native-glassmorphism": "^1.0.1",
+    "react-native-image-viewing": "^0.3.0",
     "react-native-modal": "^14.0.0-rc.1",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "^5.4.0",
