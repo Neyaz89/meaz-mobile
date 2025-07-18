@@ -764,10 +764,10 @@ export default function ProfileScreen() {
                     </View>
                   ))
                 )}
-      </View>
+              </View>
               {/* Add Comment */}
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-              <TextInput
+                <TextInput
                   value={commentText}
                   onChangeText={setCommentText}
                   placeholder="Add a comment..."
@@ -780,24 +780,23 @@ export default function ProfileScreen() {
             </View>
           </View>
         )}
-      </View>
-      {/* Settings Modal */}
-      {settingsModal && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 50 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 24, width: '80%' }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 16 }}>Settings</Text>
-            <TouchableOpacity
-              onPress={async () => { await signOut(); setSettingsModal(false); }}
-              style={{ backgroundColor: '#FF6B35', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginBottom: 12 }}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Sign Out</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setSettingsModal(false)} style={{ alignItems: 'center', padding: 10 }}>
-              <Text style={{ color: '#888', fontWeight: 'bold' }}>Cancel</Text>
-            </TouchableOpacity>
+        {settingsModal && (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 50 }}>
+            <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 24, width: '80%' }}>
+              <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 16 }}>Settings</Text>
+              <TouchableOpacity
+                onPress={async () => { await signOut(); setSettingsModal(false); }}
+                style={{ backgroundColor: '#FF6B35', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginBottom: 12 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Sign Out</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setSettingsModal(false)} style={{ alignItems: 'center', padding: 10 }}>
+                <Text style={{ color: '#888', fontWeight: 'bold' }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      )}
+        )}
+      </View>
     );
   } catch (err) {
     console.error('[ProfileScreen] Render error:', err);
