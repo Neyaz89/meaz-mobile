@@ -58,12 +58,12 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
         hashtags: story.hashtags || [],
         createdAt: new Date(story.created_at),
         expiresAt: new Date(story.expires_at),
-        user: story.users,
+        user: story.users && typeof story.users === 'object' && !Array.isArray(story.users) ? story.users : undefined,
       })) || [];
 
       set({ myStories: formattedStories, isLoading: false });
-    } catch (error) {
-      set({ error: error.message, isLoading: false });
+    } catch (error: unknown) {
+      set({ error: error instanceof Error ? error.message : String(error), isLoading: false });
     }
   },
 
@@ -117,12 +117,12 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
         hashtags: story.hashtags || [],
         createdAt: new Date(story.created_at),
         expiresAt: new Date(story.expires_at),
-        user: story.users,
+        user: story.users && typeof story.users === 'object' && !Array.isArray(story.users) ? story.users : undefined,
       })) || [];
 
       set({ stories: formattedStories, isLoading: false });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Unknown error', isLoading: false });
+    } catch (error: unknown) {
+      set({ error: error instanceof Error ? error.message : String(error), isLoading: false });
     }
   },
 
@@ -134,7 +134,7 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
     location?: any;
     mentions?: string[];
     hashtags?: string[];
-  }) => {
+  }): Promise<void> => {
     try {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) throw new Error('User not authenticated');
@@ -172,44 +172,14 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
         hashtags: story.hashtags || [],
         createdAt: new Date(story.created_at),
         expiresAt: new Date(story.expires_at),
-        user: { 
-          id: user.id, 
-          email: user.email || '',
-          username: user.user_metadata?.username || '',
-          displayName: user.user_metadata?.display_name || '',
-          avatar: '',
-          status: 'online',
-          lastSeen: new Date(),
-          bio: '',
-          phone: '',
-          location: '',
-          joinedAt: new Date(),
-          settings: {},
-          theme: {},
-          friends: [],
-          blockedUsers: [],
-          mutedChats: [],
-          pinnedChats: [],
-          customStickers: [],
-          achievements: [],
-          streakCount: 0,
-          totalMessages: 0,
-          favoriteEmojis: [],
-          premiumTier: 'free',
-          lastActivity: new Date(),
-          language: 'en',
-          notificationSettings: {},
-          privacySettings: {},
-        },
+        user: story.users && typeof story.users === 'object' && !Array.isArray(story.users) ? story.users : undefined,
       };
 
       set(state => ({
         myStories: [newStory, ...state.myStories]
       }));
-
-      return newStory;
-    } catch (error) {
-      set({ error: error.message });
+    } catch (error: unknown) {
+      set({ error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   },
@@ -503,5 +473,20 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
       get().loadMyStories(),
       get().loadFriendsStories(),
     ]);
+  },
+
+  // Real-time subscription for stories
+  subscribeToStories: () => {
+    const channel = supabase
+      .channel('stories:all')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stories' }, async (_payload) => {
+        // Refresh both myStories and friends' stories
+        await Promise.all([
+          get().loadMyStories(),
+          get().loadFriendsStories(),
+        ]);
+      })
+      .subscribe();
+    return channel;
   },
 })); 

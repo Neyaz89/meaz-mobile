@@ -64,6 +64,8 @@ export default function ProfileScreen() {
   // 1. Add state for full friend objects
   const [profileFriends, setProfileFriends] = useState<any[]>([]);
   const [friendsModal, setFriendsModal] = useState(false);
+  const { signOut } = useAuthStore();
+  const [settingsModal, setSettingsModal] = useState(false);
 
   // Determine whose profile to show
   const paramUserId = route.params?.userId || route.params?.username || currentUser?.id;
@@ -448,6 +450,15 @@ export default function ProfileScreen() {
       <View style={{ flex: 1 }}>
         {/* Profile Header UI */}
         <View style={{ alignItems: 'center', marginTop: 24 }}>
+          {/* Settings button (owner only) */}
+          {isOwner && (
+            <TouchableOpacity
+              style={{ position: 'absolute', top: 0, right: 20, zIndex: 10 }}
+              onPress={() => setSettingsModal(true)}
+            >
+              <Ionicons name="settings-outline" size={28} color="#FF6B35" />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={() => setAvatarModal(true)}>
             <Image
               source={{ uri: profile.avatar_url || 'https://picsum.photos/200/200?random=1' }}
@@ -770,6 +781,23 @@ export default function ProfileScreen() {
           </View>
         )}
       </View>
+      {/* Settings Modal */}
+      {settingsModal && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 50 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 24, width: '80%' }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 16 }}>Settings</Text>
+            <TouchableOpacity
+              onPress={async () => { await signOut(); setSettingsModal(false); }}
+              style={{ backgroundColor: '#FF6B35', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginBottom: 12 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Sign Out</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setSettingsModal(false)} style={{ alignItems: 'center', padding: 10 }}>
+              <Text style={{ color: '#888', fontWeight: 'bold' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     );
   } catch (err) {
     console.error('[ProfileScreen] Render error:', err);

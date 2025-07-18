@@ -115,23 +115,53 @@ const CallInterface: React.FC<CallInterfaceProps> = ({ visible, call, onClose })
 
   // Accept/reject/end call
   const handleAccept = async () => {
+    console.log('Accept button pressed');
+    try {
     await CallServiceAny.acceptCall(call);
+    } catch (e) {
+      alert('Error accepting call: ' + (e?.message || e));
+      console.error(e);
+    }
   };
   const handleReject = async () => {
+    console.log('Reject button pressed');
+    try {
     await CallServiceAny.rejectCall(call);
     onClose();
+    } catch (e) {
+      alert('Error rejecting call: ' + (e?.message || e));
+      console.error(e);
+    }
   };
   const handleEnd = async () => {
+    console.log('End button pressed');
+    try {
     await CallServiceAny.endCall(call);
     onClose();
+    } catch (e) {
+      alert('Error ending call: ' + (e?.message || e));
+      console.error(e);
+    }
   };
   const handleMute = async () => {
+    console.log('Mute button pressed');
+    try {
     setIsMuted((m) => !m);
     await CallServiceAny.muteMic(!isMuted);
+    } catch (e) {
+      alert('Error muting mic: ' + (e?.message || e));
+      console.error(e);
+    }
   };
   const handleToggleCamera = async () => {
+    console.log('Toggle camera button pressed');
+    try {
     setIsCameraOn((c) => !c);
     await CallServiceAny.toggleCamera(!isCameraOn);
+    } catch (e) {
+      alert('Error toggling camera: ' + (e?.message || e));
+      console.error(e);
+    }
   };
 
   // Format timer

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
 // Use process.env for Expo/React Native
@@ -8,7 +9,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your app.json or .env file.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+  },
+});
 
 // Database types for Meaz app - Updated with advanced features
 export interface Database {
@@ -978,6 +986,29 @@ export interface Database {
           earned_at?: string;
         };
       };
+      voice_notes: {
+        Row: {
+          id: string;
+          user_id: string;
+          audio_url: string;
+          duration: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          audio_url: string;
+          duration: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          audio_url?: string;
+          duration?: number;
+          created_at?: string;
+        };
+      };
     };
     Views: {
       chat_stats: {
@@ -1604,4 +1635,16 @@ export const fetchSoloLeaderboard = async (gameType: string) => {
     .order('high_score', { ascending: false })
     .limit(10);
   return data || [];
+}; 
+
+export const subscribeToVoiceNotes = (userId: string, callback: (payload: any) => void) => {
+  return supabase
+    .channel(`voice_notes:${userId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'voice_notes',
+      filter: `user_id=eq.${userId}`
+    }, callback)
+    .subscribe();
 }; 

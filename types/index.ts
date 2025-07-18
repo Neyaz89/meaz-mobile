@@ -4,6 +4,7 @@ export interface User {
   username: string;
   displayName: string;
   avatar: string;
+  avatar_url?: string; // Add this for compatibility
   status: 'online' | 'away' | 'busy' | 'offline';
   lastSeen: Date;
   isTyping?: boolean;

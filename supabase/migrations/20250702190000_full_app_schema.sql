@@ -1304,22 +1304,34 @@ CREATE POLICY "Users can report posts"
   FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
--- === SUPABASE STORAGE BUCKET AND POLICY ===
--- Create the storage bucket (run this in the dashboard if not supported in SQL)
--- Dashboard: Storage > Create bucket > Name: meaz-storage
--- Policy: Allow authenticated users to access their files
--- The following SQL MUST be run in the Supabase Dashboard SQL Editor as the owner (not in migrations):
-
+-- === SUPABASE STORAGE BUCKET AND POLICIES FOR POSTS & STORIES ===
+-- NOTE: The following steps MUST be performed manually in the Supabase Dashboard SQL Editor as the project owner.
+-- This is required because only the owner can alter storage.objects and create/drop policies on it.
+--
+-- 1. Go to Supabase Dashboard > SQL Editor
+-- 2. Run the following commands one by one:
+--
 -- Enable RLS on storage.objects
 -- ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-
+--
 -- Drop any existing policy for this bucket
 -- DROP POLICY IF EXISTS "Authenticated users can access meaz-storage" ON storage.objects;
-
+--
 -- Allow authenticated users full access to all objects in the 'meaz-storage' bucket
 -- CREATE POLICY "Authenticated users can access meaz-storage"
 --   ON storage.objects
 --   FOR ALL
 --   USING (
 --     bucket_id = 'meaz-storage' AND auth.role() = 'authenticated'
+--   )
+--   WITH CHECK (
+--     bucket_id = 'meaz-storage' AND auth.role() = 'authenticated'
 --   );
+--
+-- (Optional) Allow public read access to files in the bucket:
+-- -- CREATE POLICY "Public can read meaz-storage"
+-- --   ON storage.objects
+-- --   FOR SELECT
+-- --   USING (bucket_id = 'meaz-storage');
+
+-- === END STORAGE POLICIES ===

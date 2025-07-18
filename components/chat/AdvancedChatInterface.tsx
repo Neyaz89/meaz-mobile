@@ -1144,6 +1144,25 @@ export const AdvancedChatInterface: React.FC<AdvancedChatInterfaceProps> = ({ ch
     console.log('[Chat] Rendering', safeMessages.length, 'messages:', safeMessages.map(m => m.id));
   }, [safeMessages]);
 
+  useEffect(() => {
+    // Subscribe to new messages for this chat
+    const channel = supabase
+      .channel('messages_' + chat.id)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chat.id}` },
+        (payload) => {
+          if (payload.new) {
+            useChatStore.getState().addMessage(chat.id, payload.new);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [chat.id]);
+
   return (
     <KeyboardAvoidingView 
       style={{ flex: 1, backgroundColor: themeColors.bg }} 

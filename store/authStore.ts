@@ -64,6 +64,7 @@ const mapDatabaseUserToUser = (dbUser: DatabaseUser): User => ({
   username: dbUser.username,
   displayName: dbUser.display_name,
   avatar: dbUser.avatar_url || '', // Ensure empty string instead of null/undefined
+  avatar_url: dbUser.avatar_url || '', // Ensure empty string instead of null/undefined
   status: dbUser.status,
   lastSeen: new Date(dbUser.last_seen),
   bio: dbUser.bio || '',
@@ -147,7 +148,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
                 user: state.user ? {
                   ...state.user,
                   displayName: updatedUser.display_name || state.user.displayName,
-                  avatar: updatedUser.avatar_url || state.user.avatar,
+                  avatar: updatedUser.avatar_url || updatedUser.avatar || state.user.avatar, // always set both
+                  avatar_url: updatedUser.avatar_url || updatedUser.avatar || state.user.avatar_url,
                   bio: updatedUser.bio || state.user.bio,
                   phone: updatedUser.phone || state.user.phone,
                   location: updatedUser.location || state.user.location,
@@ -416,7 +418,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   updateUserProfile: (profile: Partial<User>) => {
     set(state => ({
-      user: state.user ? { ...state.user, ...profile } : null
+      user: state.user ? {
+        ...state.user,
+        ...profile,
+        avatar: (profile as any).avatar_url || profile.avatar || state.user.avatar,
+        avatar_url: (profile as any).avatar_url || profile.avatar || (state.user as any).avatar_url,
+      } : null
     }));
   },
 
@@ -455,7 +462,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
       
       // Update local user state
-      const updatedUser = { ...user, avatar: urlData.publicUrl };
+      const updatedUser = { ...user, avatar: urlData.publicUrl, avatar_url: urlData.publicUrl };
       set(state => ({
         user: updatedUser,
         isLoading: false,
@@ -524,10 +531,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       if (storedSession) {
         try {
           const parsedSession = JSON.parse(storedSession);
-          const sessionAge = Date.now() - parsedSession.timestamp;
-          
-          // Only use stored session if it's less than 24 hours old
-          if (sessionAge < 24 * 60 * 60 * 1000 && parsedSession.user) {
+          if (parsedSession.user) {
             console.log('Restoring user from stored session:', parsedSession.user.id);
             set({
               user: parsedSession.user,
@@ -537,7 +541,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
               hasCompletedOnboarding: true,
               isInitialized: true
             });
-            
             // Verify session is still valid with Supabase
             const { data: { session }, error } = await supabase.auth.getSession();
             if (!session || error) {

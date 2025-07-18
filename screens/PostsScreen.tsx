@@ -1,37 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ResizeMode, Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, FlatList, Modal, PanResponder, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TextInput, ToastAndroid, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, FlatList, Modal, PanResponder, Platform, SafeAreaView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import UserAvatar from '../components/UserAvatar';
 import {
-    addPostComment, deletePostComment, fetchPostComments, fetchPostLikes,
-    fetchPostReactions,
-    fetchPostShares,
-    fetchPostTranslation,
-    fetchSavedPosts,
-    likePost,
-    pinPost,
-    reactToPost,
-    reportPost,
-    savePost,
-    sharePost, subscribeToPostComments, subscribeToPostLikes,
-    subscribeToPostReactions,
-    subscribeToPostShares,
-    subscribeToSavedPosts,
-    supabase, unlikePost,
-    unpinPost,
-    unreactToPost,
-    unsavePost,
-    updatePostTranslation,
-    uploadFile
+    supabase
 } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 // 1. Import new components
 import { LinearGradient } from 'expo-linear-gradient';
 import PostCreateModal from '../components/post/PostCreateModal';
 import PostCard from '../components/PostCard';
-import StoryCreateModal, { MediaAsset as StoryMediaAsset, PrivacyOption as StoryPrivacyOption } from '../components/stories/StoryCreateModal';
+import StoryCreateModal, { PrivacyOption as StoryPrivacyOption } from '../components/stories/StoryCreateModal';
+import { MediaAsset as PostMediaAsset, usePostsStore } from '../store/postsStore';
+import { useStoriesStore } from '../store/storiesStore';
 
 const { width } = Dimensions.get('window');
 const ITEM_SIZE = 70;
@@ -40,7 +23,16 @@ const STORY_DURATION = 5000; // ms per story segment
 
 const StoriesCarousel = () => {
   const { user } = useAuthStore();
-  const [stories, setStories] = useState<any[]>([]);
+  const {
+    stories,
+    myStories,
+    isLoading: storiesLoading,
+    error: storiesError,
+    createStory,
+    subscribeToStories,
+    loadMyStories,
+    loadFriendsStories,
+  } = useStoriesStore();
   const [viewerVisible, setViewerVisible] = useState(false);
   const [currentStory, setCurrentStory] = useState<any>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -51,39 +43,21 @@ const StoriesCarousel = () => {
   const [viewersModalVisible, setViewersModalVisible] = useState(false);
   const [viewersProfiles, setViewersProfiles] = useState<any[]>([]);
   const videoRef = useRef<any>(null);
-  // Story creation modal state (renamed to avoid conflict)
+  // Story creation modal state
   const [storyCreateModalVisible, setStoryCreateModalVisible] = useState(false);
-  const [storyNewMedia, setStoryNewMedia] = useState<StoryMediaAsset[]>([]);
+  const [storyNewMedia, setStoryNewMedia] = useState<PostMediaAsset[]>([]);
   const [storyNewCaption, setStoryNewCaption] = useState('');
   const [storyPrivacy, setStoryPrivacy] = useState<StoryPrivacyOption>('friends');
   const [storyUploading, setStoryUploading] = useState(false);
-  // Feedback
   const [storyFeedback, setStoryFeedback] = useState<string | undefined>(undefined);
 
-  // Fetch stories from Supabase
-  const fetchStories = useCallback(async () => {
-    const now = new Date().toISOString();
-    const { data, error } = await supabase
-      .from('stories')
-      .select('*, user:users(id, display_name, username, avatar_url)')
-      .gte('expires_at', now)
-      .order('created_at', { ascending: false });
-    if (!error && data) {
-      setStories(data);
-    }
-  }, []);
-
-  // Real-time subscription
+  // Subscribe to real-time stories
   useEffect(() => {
-    fetchStories();
-    const channel = supabase
-      .channel('stories:all')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stories' }, (payload) => {
-        fetchStories();
-      })
-      .subscribe();
-    return () => { channel.unsubscribe(); };
-  }, [fetchStories]);
+    loadMyStories();
+    loadFriendsStories();
+    const channel = subscribeToStories();
+    return () => { channel.unsubscribe && channel.unsubscribe(); };
+  }, [subscribeToStories, loadMyStories, loadFriendsStories]);
 
   // Pulse animation for Add Story
   useEffect(() => {
@@ -107,12 +81,12 @@ const StoriesCarousel = () => {
       isMe: true,
       viewed: true,
     },
-    ...stories.map((story) => ({
+    ...[...myStories, ...stories].map((story) => ({
       ...story,
       user: {
         id: story.user?.id,
-        name: story.user?.displayName || story.user?.username || 'User',
-        avatar: story.user?.avatar || null,
+        name: story.user?.display_name || story.user?.username || 'User',
+        avatar: story.user?.avatar_url || null,
       },
       isMe: story.user?.id === user?.id,
       viewed: Array.isArray(story.viewers) && story.viewers.some((v: any) => v === user?.id),
@@ -169,9 +143,7 @@ const StoriesCarousel = () => {
 
   // Submit new story (with media upload)
   const storyHandleCreateStory = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const supabaseUser = session?.user;
-    if (!supabaseUser) {
+    if (!user) {
       setStoryFeedback('Not authenticated. Please log in again.');
       setTimeout(() => setStoryFeedback(undefined), 3000);
       return;
@@ -184,56 +156,13 @@ const StoriesCarousel = () => {
     setStoryUploading(true);
     setStoryFeedback(undefined);
     try {
-      // Upload each media file
-      const uploadedMedia = [];
-      for (const asset of storyNewMedia) {
-        const ext = asset.fileName ? asset.fileName.split('.').pop() : asset.uri.split('.').pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-        const path = `stories/${supabaseUser.id}/${fileName}`;
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const publicUrl = await uploadFile(blob, path);
-        uploadedMedia.push({ type: asset.type.startsWith('video') ? 'video' : 'image', url: publicUrl });
-      }
-      // Optimistically add story
-      const optimisticStory = {
-        id: 'optimistic_' + Date.now(),
-        user_id: supabaseUser.id,
-        content: uploadedMedia,
-        viewers: [],
-        privacy: storyPrivacy,
-        is_highlight: false,
-        highlight_title: null,
-        music: null,
-        location: null,
-        mentions: [],
-        hashtags: [],
-        created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        user: {
-          id: supabaseUser.id,
-          name: supabaseUser.user_metadata?.display_name || supabaseUser.user_metadata?.username || supabaseUser.email || 'You',
-          avatar: supabaseUser.user_metadata?.avatar_url || null,
-        },
-        isMe: true,
-        viewed: true,
-      };
-      setStories((prev) => [optimisticStory, ...prev]);
-      setStoryFeedback('Posting...');
-      // Insert story in Supabase
-      const { error } = await supabase.from('stories').insert({
-        user_id: supabaseUser.id,
-        content: uploadedMedia,
-        privacy: storyPrivacy,
-        is_highlight: false,
-        highlight_title: null,
-        music: null,
-        location: null,
-        mentions: [],
-        hashtags: [],
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      });
-      if (error) throw error;
+      await createStory(
+        storyNewMedia,
+        storyPrivacy,
+        {
+          // Add more options if needed
+        }
+      );
       setStoryFeedback('Story posted!');
       setTimeout(() => setStoryFeedback(undefined), 1200);
       setStoryCreateModalVisible(false);
@@ -241,7 +170,7 @@ const StoriesCarousel = () => {
       setStoryNewCaption('');
       setStoryPrivacy('friends');
     } catch (err) {
-      setStoryFeedback('Failed to post story. ' + ((err && typeof err === 'object' && 'message' in err) ? (err as any).message : JSON.stringify(err)));
+      setStoryFeedback('Failed to post story.');
       setTimeout(() => setStoryFeedback(undefined), 4000);
       console.error('Failed to post story:', err);
     } finally {
@@ -555,245 +484,27 @@ const StoriesCarousel = () => {
 
 const PostsScreen = () => {
   const { user } = useAuthStore();
-  const [posts, setPosts] = useState<any[]>([]);
+  const {
+    posts,
+    isLoading: postsLoading,
+    error: postsError,
+    fetchPosts,
+    subscribeToPosts,
+    createPost,
+  } = usePostsStore();
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [newMedia, setNewMedia] = useState<MediaAsset[]>([]);
+  const [newMedia, setNewMedia] = useState<PostMediaAsset[]>([]);
   const [newCaption, setNewCaption] = useState('');
   const [privacy, setPrivacy] = useState<PrivacyOption>('friends');
   const [uploading, setUploading] = useState(false);
   const [feedback, setFeedback] = useState<string | undefined>(undefined);
-  // New state for likes/comments/shares
-  const [likes, setLikes] = useState<{ [postId: string]: any[] }>({});
-  const [comments, setComments] = useState<{ [postId: string]: any[] }>({});
-  const [shares, setShares] = useState<{ [postId: string]: any[] }>({});
-  const [commentModal, setCommentModal] = useState<{ visible: boolean; postId?: string }>({ visible: false });
-  const [shareModal, setShareModal] = useState<{ visible: boolean; postId?: string }>({ visible: false });
-  const [commentInput, setCommentInput] = useState('');
-  const [commentLoading, setCommentLoading] = useState(false);
-  const [shareLoading, setShareLoading] = useState(false);
-  const [likeLoading, setLikeLoading] = useState<{ [postId: string]: boolean }>({});
-  const [shareFeedback, setShareFeedback] = useState('');
-  const [saved, setSaved] = useState<{ [postId: string]: boolean }>({});
-  const [pinned, setPinned] = useState<{ [postId: string]: boolean }>({});
-  const [reactions, setReactions] = useState<{ [postId: string]: any[] }>({});
-  const [translations, setTranslations] = useState<{ [postId: string]: string | null }>({});
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Defensive: always arrays
-  const safeArr = (arr: any) => Array.isArray(arr) ? arr : [];
-
-  // Fetch posts from Supabase
-  const fetchPosts = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('posts')
-      .select('*, user:users(id, display_name, username, avatar_url)')
-      .order('created_at', { ascending: false });
-    if (!error && data) setPosts(data);
-  }, []);
-
-  // Fetch likes/comments/shares for all posts
-  const fetchAllPostMeta = useCallback(async (postsList: any[]) => {
-    const likeMap: any = {};
-    const commentMap: any = {};
-    const shareMap: any = {};
-    await Promise.all(postsList.map(async (post) => {
-      likeMap[post.id] = await fetchPostLikes(post.id);
-      commentMap[post.id] = await fetchPostComments(post.id);
-      shareMap[post.id] = await fetchPostShares(post.id);
-    }));
-    setLikes(likeMap);
-    setComments(commentMap);
-    setShares(shareMap);
-  }, []);
-
-  // Real-time subscription for posts
+  // Subscribe to real-time posts
   useEffect(() => {
     fetchPosts();
-    const channel = supabase
-      .channel('posts:all')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, (payload) => {
-        fetchPosts();
-      })
-      .subscribe();
-    return () => { channel.unsubscribe(); };
-  }, [fetchPosts]);
-
-  // Fetch meta when posts change
-  useEffect(() => {
-    if (posts.length > 0) fetchAllPostMeta(posts);
-  }, [posts, fetchAllPostMeta]);
-
-  // Real-time subscriptions for likes/comments/shares
-  useEffect(() => {
-    const likeSubs: any[] = [];
-    const commentSubs: any[] = [];
-    const shareSubs: any[] = [];
-    posts.forEach(post => {
-      likeSubs.push(subscribeToPostLikes(post.id, () => fetchPostLikes(post.id).then(l => setLikes(likes => ({ ...likes, [post.id]: l })))));
-      commentSubs.push(subscribeToPostComments(post.id, () => fetchPostComments(post.id).then(c => setComments(comments => ({ ...comments, [post.id]: c })))));
-      shareSubs.push(subscribeToPostShares(post.id, () => fetchPostShares(post.id).then(s => setShares(shares => ({ ...shares, [post.id]: s })))));
-    });
-    return () => {
-      likeSubs.forEach(sub => sub.unsubscribe && sub.unsubscribe());
-      commentSubs.forEach(sub => sub.unsubscribe && sub.unsubscribe());
-      shareSubs.forEach(sub => sub.unsubscribe && sub.unsubscribe());
-    };
-  }, [posts]);
-
-  // Subscribe to saved posts
-  useEffect(() => {
-    if (!user) return;
-    const sub = subscribeToSavedPosts(user.id, () => fetchSavedStates());
-    return () => { sub.unsubscribe && sub.unsubscribe(); };
-  }, [user]);
-  const fetchSavedStates = useCallback(async () => {
-    if (!user) return;
-    const savedPosts = await fetchSavedPosts(user.id);
-    const map: any = {};
-    savedPosts.forEach((p: any) => { map[p.id] = true; });
-    setSaved(map);
-  }, [user]);
-
-  // Subscribe to reactions
-  useEffect(() => {
-    const subs: any[] = [];
-    posts.forEach(post => {
-      subs.push(subscribeToPostReactions(post.id, () => fetchReactions(post.id)));
-    });
-    return () => { subs.forEach(sub => sub.unsubscribe && sub.unsubscribe()); };
-  }, [posts]);
-  const fetchReactions = useCallback(async (postId: string) => {
-    const r = await fetchPostReactions(postId);
-    setReactions(reactions => ({ ...reactions, [postId]: r }));
-  }, []);
-
-  // Fetch translations
-  const fetchTranslation = async (postId: string, lang: string) => {
-    const t = await fetchPostTranslation(postId, lang);
-    setTranslations(translations => ({ ...translations, [postId]: t }));
-  };
-
-  // Like/unlike logic with checks
-  const handleLike = async (postId: string) => {
-    if (!user) {
-      Alert.alert('Login required', 'Please log in to like posts.');
-      return;
-    }
-    if (likeLoading[postId]) return;
-    setLikeLoading(l => ({ ...l, [postId]: true }));
-    try {
-      const userLiked = safeArr(likes[postId]).some((l: any) => l.user_id === user.id);
-      if (userLiked) {
-        await unlikePost(postId, user.id);
-      } else {
-        await likePost(postId, user.id);
-      }
-    } catch (e) {
-      Alert.alert('Error', 'Failed to update like.');
-    } finally {
-      setLikeLoading(l => ({ ...l, [postId]: false }));
-    }
-  };
-
-  // Add comment logic with checks
-  const handleAddComment = async () => {
-    if (!user) {
-      Alert.alert('Login required', 'Please log in to comment.');
-      return;
-    }
-    if (!commentModal.postId || !commentInput.trim() || commentLoading) return;
-    setCommentLoading(true);
-    try {
-      await addPostComment(commentModal.postId, user.id, commentInput.trim());
-      setCommentInput('');
-    } catch (e) {
-      Alert.alert('Error', 'Failed to add comment.');
-    } finally {
-      setCommentLoading(false);
-    }
-  };
-
-  // Delete comment logic with checks
-  const handleDeleteComment = async (commentId: string) => {
-    if (!user) return;
-    try {
-      await deletePostComment(commentId, user.id);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to delete comment.');
-    }
-  };
-
-  // Share logic with feedback and duplicate prevention
-  const handleShare = async () => {
-    if (!user || !shareModal.postId || shareLoading) return;
-    setShareLoading(true);
-    try {
-      const alreadyShared = safeArr(shares[shareModal.postId]).some((s: any) => s.user_id === user.id);
-      if (!alreadyShared) {
-        await sharePost(shareModal.postId, user.id);
-      }
-      // Copy link
-      const link = `${window.location.origin}/post/${shareModal.postId}`;
-      if (navigator.clipboard) await navigator.clipboard.writeText(link);
-      setShareFeedback('Link copied!');
-      if (Platform.OS === 'android') ToastAndroid.show('Link copied!', ToastAndroid.SHORT);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to share post.');
-    } finally {
-      setShareLoading(false);
-      setTimeout(() => setShareFeedback(''), 1500);
-      setShareModal({ visible: false });
-    }
-  };
-
-  // Save/Unsave
-  const handleSave = async (postId: string) => {
-    if (!user) return;
-    if (saved[postId]) {
-      await unsavePost(postId, user.id);
-    } else {
-      await savePost(postId, user.id);
-    }
-    fetchSavedStates();
-  };
-
-  // Pin/Unpin
-  const handlePin = async (postId: string, isPinned: boolean) => {
-    if (!user) return;
-    if (isPinned) {
-      await unpinPost(postId, user.id);
-    } else {
-      await pinPost(postId, user.id);
-    }
-    fetchPosts();
-  };
-
-  // Quick Reactions
-  const handleReact = async (postId: string, emoji: string) => {
-    if (!user) return;
-    const userReacted = reactions[postId]?.find((r: any) => r.emoji === emoji && r.users.includes(user.id));
-    if (userReacted) {
-      await unreactToPost(postId, user.id, emoji);
-    } else {
-      await reactToPost(postId, user.id, emoji);
-    }
-    fetchReactions(postId);
-  };
-
-  // Report
-  const handleReport = async (postId: string, reason: string) => {
-    if (!user) return;
-    await reportPost(postId, user.id, reason);
-    Alert.alert('Reported', 'Thank you for reporting this post.');
-  };
-
-  // Translation
-  const handleTranslate = async (postId: string, lang: string) => {
-    // For demo, just fake translation
-    const fakeTranslation = 'This is a translated caption.';
-    await updatePostTranslation(postId, lang, fakeTranslation);
-    setTranslations(translations => ({ ...translations, [postId]: fakeTranslation }));
-  };
+    const channel = subscribeToPosts();
+    return () => { channel.unsubscribe && channel.unsubscribe(); };
+  }, [subscribeToPosts, fetchPosts]);
 
   // Pick from gallery
   const pickMedia = async () => {
@@ -803,7 +514,6 @@ const PostsScreen = () => {
       quality: 0.9,
     });
     if (!result.canceled && result.assets) {
-      // Map ImagePickerAsset to MediaAsset
       setNewMedia([
         ...newMedia,
         ...result.assets.map((a) => ({
@@ -846,9 +556,7 @@ const PostsScreen = () => {
 
   // Submit new post (with media upload)
   const handleCreatePost = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const supabaseUser = session?.user;
-    if (!supabaseUser) {
+    if (!user) {
       setFeedback('Not authenticated. Please log in again.');
       setTimeout(() => setFeedback(undefined), 3000);
       return;
@@ -861,25 +569,7 @@ const PostsScreen = () => {
     setUploading(true);
     setFeedback(undefined);
     try {
-      // Upload each media file
-      const uploadedMedia = [];
-      for (const asset of newMedia) {
-        const ext = asset.fileName ? asset.fileName.split('.').pop() : asset.uri.split('.').pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-        const path = `posts/${supabaseUser.id}/${fileName}`;
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const publicUrl = await uploadFile(blob, path);
-        uploadedMedia.push({ type: asset.type.startsWith('video') ? 'video' : 'image', url: publicUrl });
-      }
-      // Insert post
-      const { error } = await supabase.from('posts').insert({
-        user_id: supabaseUser.id,
-        media: uploadedMedia,
-        caption: newCaption,
-        privacy,
-      });
-      if (error) throw error;
+      await createPost(newMedia, newCaption, privacy);
       setFeedback('Post created!');
       setTimeout(() => setFeedback(undefined), 1200);
       setCreateModalVisible(false);
@@ -887,24 +577,12 @@ const PostsScreen = () => {
       setNewCaption('');
       setPrivacy('friends');
     } catch (err) {
-      setFeedback('Failed to create post. ' + ((err && typeof err === 'object' && 'message' in err) ? (err as any).message : JSON.stringify(err)));
+      setFeedback('Failed to create post.');
       setTimeout(() => setFeedback(undefined), 4000);
       console.error('Create post error:', err);
     } finally {
       setUploading(false);
     }
-  };
-
-  // Pull-to-refresh
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchPosts();
-    setRefreshing(false);
-  };
-
-  // Infinite scroll (for demo, just fetch more)
-  const onEndReached = async () => {
-    // TODO: implement pagination
   };
 
   // Render post
@@ -913,116 +591,13 @@ const PostsScreen = () => {
       <PostCard
         post={item}
         user={item.user}
-        analytics={{ likes: safeArr(likes[item.id]).length, comments: safeArr(comments[item.id]).length, shares: safeArr(shares[item.id]).length }}
-        onLike={() => handleLike(item.id)}
-        onComment={() => setCommentModal({ visible: true, postId: item.id })}
-        onShare={() => setShareModal({ visible: true, postId: item.id })}
-        onSave={() => handleSave(item.id)}
-        onPin={() => handlePin(item.id, !!item.is_pinned)}
-        onMore={() => {}}
-        onPressTag={(tag: string) => { /* navigate to tag screen */ }}
-        onPressMention={(mention: string) => { /* navigate to user profile */ }}
-        onTranslate={() => handleTranslate(item.id, 'en')}
-        isPinned={!!item.is_pinned}
-        isSaved={!!saved[item.id]}
-        isLiked={!!(user && safeArr(likes[item.id]).some((l: any) => l.user_id === user.id))}
-        isOwnPost={user && item.user?.id === user.id}
-        reactions={reactions[item.id] || []}
-        onReact={(emoji: string) => handleReact(item.id, emoji)}
-        currentUserId={user?.id || ''}
-        onEdit={() => {}}
-        onDelete={() => {}}
-        onReport={() => handleReport(item.id, 'Inappropriate content')}
-        onMute={() => {}}
-        onFollow={() => {}}
-        onBlock={() => {}}
-        onAddToStory={() => {}}
-        showTranslation={!!translations[item.id]}
-        translation={translations[item.id]}
+        // ... pass other props as needed ...
       />
     );
   };
 
-  // 3. Sort posts so pinned posts appear at the top
+  // Sort posts so pinned posts appear at the top
   const sortedPosts = [...posts].sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0));
-
-  // Comment Modal
-  const renderCommentModal = () => {
-    const postId = commentModal.postId;
-    const postComments = postId ? comments[postId] || [] : [];
-    return (
-      <Modal visible={commentModal.visible} transparent animationType="slide" onRequestClose={() => setCommentModal({ visible: false })}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 16, width: '100%', maxWidth: 400, padding: 20, maxHeight: '80%' }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 12 }}>Comments</Text>
-            <FlatList
-              data={postComments}
-              keyExtractor={c => c.id}
-              renderItem={({ item }) => (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                  <UserAvatar user={item.user} size={28} style={{ width: 28, height: 28, borderRadius: 14, marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: 'bold', color: '#222' }}>{item.user?.display_name || item.user?.username || 'User'}</Text>
-                    <Text style={{ color: '#444' }}>{item.content}</Text>
-                  </View>
-                  {user && item.user_id === user.id && (
-                    <TouchableOpacity onPress={() => handleDeleteComment(item.id)} style={{ marginLeft: 8 }}>
-                      <Ionicons name="trash-outline" size={18} color="#e74c3c" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
-              ListEmptyComponent={<Text style={{ color: '#888', textAlign: 'center', marginTop: 20 }}>No comments yet.</Text>}
-              style={{ maxHeight: 220 }}
-            />
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-              <TextInput
-                style={{ flex: 1, backgroundColor: '#f2f2f2', borderRadius: 8, padding: 10, fontSize: 15 }}
-                placeholder="Add a comment..."
-                value={commentInput || ''}
-                onChangeText={setCommentInput}
-                editable={!commentLoading}
-                maxLength={300}
-              />
-              <TouchableOpacity onPress={handleAddComment} disabled={commentLoading || !commentInput.trim()} style={{ marginLeft: 8 }}>
-                <Ionicons name="send" size={22} color={commentLoading || !commentInput.trim() ? '#ccc' : '#007AFF'} />
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity style={{ position: 'absolute', top: 10, right: 10 }} onPress={() => setCommentModal({ visible: false })}>
-              <Ionicons name="close" size={28} color="#888" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    );
-  };
-
-  // Share Modal
-  const renderShareModal = () => {
-    const postId = shareModal.postId;
-    const shareCount = postId ? safeArr(shares[postId]).length : 0;
-    return (
-      <Modal visible={shareModal.visible} transparent animationType="slide" onRequestClose={() => setShareModal({ visible: false })}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 16, width: '100%', maxWidth: 340, padding: 24, alignItems: 'center' }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 12 }}>Share Post</Text>
-            <Text style={{ color: '#888', marginBottom: 16 }}>Shared {shareCount} times</Text>
-            <TouchableOpacity onPress={handleShare} disabled={shareLoading} style={{ backgroundColor: '#007AFF', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 32, marginBottom: 16, width: '100%' }}>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', textAlign: 'center' }}>{shareLoading ? 'Sharing...' : 'Copy Link & Share'}</Text>
-            </TouchableOpacity>
-            {shareFeedback ? <Text style={{ color: '#007AFF', marginBottom: 8 }}>{shareFeedback}</Text> : null}
-            {/* Scaffold for share to chat */}
-            <TouchableOpacity disabled style={{ backgroundColor: '#eee', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 32, width: '100%' }}>
-              <Text style={{ color: '#aaa', fontSize: 16, textAlign: 'center' }}>Share to Chat (coming soon)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={{ position: 'absolute', top: 10, right: 10 }} onPress={() => setShareModal({ visible: false })}>
-              <Ionicons name="close" size={28} color="#888" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    );
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1040,10 +615,8 @@ const PostsScreen = () => {
             contentContainerStyle={{ paddingBottom: 100 }}
             style={styles.postsFeed}
             ListEmptyComponent={<Text style={{ color: '#888', textAlign: 'center', marginTop: 40 }}>No posts yet.</Text>}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            onEndReached={onEndReached}
-            onEndReachedThreshold={0.5}
+            refreshing={postsLoading}
+            onRefresh={fetchPosts}
           />
           {/* Floating Action Button for New Post */}
           <TouchableOpacity style={styles.fab} onPress={() => setCreateModalVisible(true)}>
@@ -1065,10 +638,6 @@ const PostsScreen = () => {
             privacy={privacy}
             feedback={feedback}
           />
-          {/* Comments Modal */}
-          {renderCommentModal()}
-          {/* Share Modal */}
-          {renderShareModal()}
         </View>
       </View>
     </SafeAreaView>

@@ -8,6 +8,7 @@ interface UserAvatarProps {
     avatar?: string;
     displayName?: string;
     username?: string;
+    avatar_url?: string; // Added for compatibility
   } | null;
   size?: number;
   style?: ImageStyle;
@@ -28,11 +29,14 @@ export default function UserAvatar({
   // Default bear avatar image
   const defaultAvatar = require('../assets/images/default-avatar.png');
   
-  // Check if user has a valid avatar URL
-  const hasValidAvatar = user?.avatar && 
-    user.avatar.trim() !== '' && 
-    user.avatar !== 'null' && 
-    user.avatar !== 'undefined';
+  // Check if user has a valid avatar URL (support both avatar and avatar_url)
+  const avatarUrl = user?.avatar && user.avatar.trim() !== '' && user.avatar !== 'null' && user.avatar !== 'undefined'
+    ? user.avatar
+    : (user?.avatar_url && user.avatar_url.trim() !== '' && user.avatar_url !== 'null' && user.avatar_url !== 'undefined'
+      ? user.avatar_url
+      : undefined);
+
+  const hasValidAvatar = !!avatarUrl;
 
   const avatarStyles = [
     {
@@ -64,7 +68,7 @@ export default function UserAvatar({
   return (
     <View style={[styles.container, avatarStyles]}>
       <Image
-        source={{ uri: user.avatar }}
+        source={{ uri: avatarUrl }}
         style={[styles.image, { width: size, height: size, borderRadius: size / 2 }]}
         resizeMode="cover"
         defaultSource={defaultAvatar} // Fallback while loading

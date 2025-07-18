@@ -5,13 +5,17 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 // Import stores
 import { useRealTimeProfile } from './hooks/useRealTimeProfile';
 import { initializeAuth, useAuthStore } from './store/authStore';
 
 // Import screens
+import { ThemeProvider } from './components/ThemeContext';
+import { ThemedText } from './components/ThemedText';
+import { ThemedView } from './components/ThemedView';
+import { ToastProvider } from './components/ui/ToastProvider';
 import AuthScreen from './screens/AuthScreen';
 import ChatDetailScreen from './screens/ChatDetailScreen';
 import ChatsScreen from './screens/ChatsScreen';
@@ -25,10 +29,10 @@ import SoloGamePlayScreen from './screens/SoloGamePlayScreen';
 import ActivitiesHubScreen from './screens/StatusScreen';
 
 // Import components
-import { ThemeProvider } from './components/ThemeContext';
-import { ThemedText } from './components/ThemedText';
-import { ThemedView } from './components/ThemedView';
-import { ToastProvider } from './components/ui/ToastProvider';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const CallService: any = require('./components/call/CallService').default;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CallServiceAny: any = CallService;
 
 // Import icons
 import { Ionicons } from '@expo/vector-icons';
@@ -61,86 +65,88 @@ function MainTabs() {
   console.log('MainTabs component rendering with user:', user.id);
   
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap;
+    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName: keyof typeof Ionicons.glyphMap;
 
-          switch (route.name) {
-            case 'Chats':
-              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-              break;
-            case 'Friends':
-              iconName = focused ? 'people' : 'people-outline';
-              break;
-            case 'Home':
-              iconName = focused ? 'home' : 'home-outline';
-              break;
-            case 'Activities':
-              iconName = focused ? 'game-controller' : 'game-controller-outline';
-              break;
-            case 'Profile':
-              iconName = focused ? 'person' : 'person-outline';
-              break;
-            default:
-              iconName = 'help-outline';
-          }
+            switch (route.name) {
+              case 'Chats':
+                iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+                break;
+              case 'Friends':
+                iconName = focused ? 'people' : 'people-outline';
+                break;
+              case 'Home':
+                iconName = focused ? 'home' : 'home-outline';
+                break;
+              case 'Activities':
+                iconName = focused ? 'game-controller' : 'game-controller-outline';
+                break;
+              case 'Profile':
+                iconName = focused ? 'person' : 'person-outline';
+                break;
+              default:
+                iconName = 'help-outline';
+            }
 
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#FF6B35', // Indian Saffron
-        tabBarInactiveTintColor: 'gray',
-        tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e5e5',
-          paddingBottom: 5,
-          paddingTop: 5,
-          height: 60,
-        },
-        headerShown: false,
-      })}
-      initialRouteName="Chats"
-    >
-      <Tab.Screen 
-        name="Chats" 
-        component={ChatsScreen}
-        options={{
-          tabBarLabel: 'Chats',
-        }}
-      />
-      <Tab.Screen 
-        name="Friends" 
-        component={FriendsScreen}
-        options={{
-          tabBarLabel: 'Friends',
-        }}
-      />
-      <Tab.Screen 
-        name="Home" 
-        component={PostsScreen}
-        options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen 
-        name="Activities" 
-        component={ActivitiesHubScreen}
-        options={{
-          tabBarLabel: 'Activities',
-        }}
-      />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileScreen}
-        options={{
-          tabBarLabel: 'Profile',
-        }}
-      />
-    </Tab.Navigator>
+            return <Ionicons name={iconName} size={size} color={color} />;
+          },
+          tabBarActiveTintColor: '#FF6B35', // Indian Saffron
+          tabBarInactiveTintColor: 'gray',
+          tabBarStyle: {
+            backgroundColor: '#ffffff',
+            borderTopWidth: 1,
+            borderTopColor: '#e5e5e5',
+            paddingBottom: 5,
+            paddingTop: 5,
+            height: 60,
+          },
+          headerShown: false,
+        })}
+        initialRouteName="Chats"
+      >
+        <Tab.Screen 
+          name="Chats" 
+          component={ChatsScreen}
+          options={{
+            tabBarLabel: 'Chats',
+          }}
+        />
+        <Tab.Screen 
+          name="Friends" 
+          component={FriendsScreen}
+          options={{
+            tabBarLabel: 'Friends',
+          }}
+        />
+        <Tab.Screen 
+          name="Home" 
+          component={PostsScreen}
+          options={{
+            tabBarLabel: 'Home',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="home" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Activities" 
+          component={ActivitiesHubScreen}
+          options={{
+            tabBarLabel: 'Activities',
+          }}
+        />
+        <Tab.Screen 
+          name="Profile" 
+          component={ProfileScreen}
+          options={{
+            tabBarLabel: 'Profile',
+          }}
+        />
+      </Tab.Navigator>
+    </SafeAreaView>
   );
 }
 
@@ -153,7 +159,7 @@ export default function App() {
   // Initialize real-time profile updates
   useRealTimeProfile();
 
-  useNotifications(token => {
+  useNotifications((token: string) => {
     // TODO: Send this token to your backend and associate with the logged-in user
     // Example: await api.savePushToken(token)
     console.log('Expo Push Token:', token);
@@ -176,6 +182,14 @@ export default function App() {
     // Initialize authentication
     initializeAuth();
   }, []);
+
+  // Sync authenticated user to CallService for call features
+  useEffect(() => {
+    if (user) {
+      CallService.user = user;
+      console.log('CallService.user set:', user.id);
+    }
+  }, [user]);
 
   // Hide splash screen when loading is complete and auth is initialized
   useEffect(() => {

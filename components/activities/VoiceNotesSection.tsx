@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { RecordingPresets, useAudioPlayer, useAudioRecorder } from 'expo-audio';
+import { Audio } from 'expo-av';
+import { RecordingOptionsPresets } from 'expo-av/build/Audio/RecordingConstants';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, FlatList, Text, TouchableOpacity, View } from 'react-native';
-import { supabase } from '../../lib/supabase';
+import { subscribeToVoiceNotes, supabase } from '../../lib/supabase';
 import { ThemedText } from '../ThemedText';
 
 const VoiceNotesSection = () => {
@@ -14,17 +15,12 @@ const VoiceNotesSection = () => {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [pulseAnim] = useState(new Animated.Value(1));
   const [waveform, setWaveform] = useState<number[]>([]);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+
   const currentPlayingNote = voiceNotes.find((item: any) => item.id === playingId);
   const currentUrl = currentPlayingNote ? supabase.storage.from('meaz-storage').getPublicUrl(currentPlayingNote.url).data.publicUrl : undefined;
-  const player = useAudioPlayer(currentUrl);
-
-  // Recorder
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY, (status) => {
-    // Optionally update waveform here if metering is available
-    // if ('metering' in status && status.metering !== undefined) {
-    //   setWaveform(...); // implement waveform update if needed
-    // }
-  });
 
   // Fetch all voice notes for the user
   const fetchVoiceNotes = async () => {
@@ -42,21 +38,39 @@ const VoiceNotesSection = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchVoiceNotes(); }, []);
-
-  useEffect(() => {
-    if (!loading && voiceNotes.length > 0) {
-      // The playerStates map is removed, so this effect is no longer needed
-      // The player state is now managed directly by the 'player' variable
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, voiceNotes.length]);
+  useEffect(() => { 
+    fetchVoiceNotes();
+    let subscription: any;
+    let isMounted = true;
+    (async () => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (user) {
+        subscription = subscribeToVoiceNotes(user.id, (payload: any) => {
+          if (isMounted) fetchVoiceNotes();
+        });
+      }
+    })();
+    return () => {
+      isMounted = false;
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe();
+      } else if (subscription && typeof supabase.removeChannel === 'function') {
+        supabase.removeChannel(subscription);
+      }
+    };
+  }, []);
 
   // Start recording
   const startRecording = async () => {
     try {
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') throw new Error('Microphone permission not granted');
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(RecordingOptionsPresets.HIGH_QUALITY);
+      await rec.startAsync();
+      setRecording(rec);
+      setIsRecording(true);
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
@@ -64,6 +78,7 @@ const VoiceNotesSection = () => {
         ])
       ).start();
     } catch (err) {
+      setIsRecording(false);
       Alert.alert('Error', 'Failed to start recording.');
     }
   };
@@ -72,10 +87,13 @@ const VoiceNotesSection = () => {
   const stopRecording = async () => {
     setUploading(true);
     try {
-      await audioRecorder.stop();
-      const uri = audioRecorder.uri;
-      if (!uri) throw new Error('No recording URI');
+      if (!recording) throw new Error('No recording in progress');
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      setIsRecording(false);
       pulseAnim.stopAnimation();
+      if (!uri) throw new Error('No recording URI');
       const fileName = `${Date.now()}_voicenote.m4a`;
       const { data, error } = await supabase.storage.from('meaz-storage').upload(fileName, { uri, type: 'audio/m4a', name: fileName } as any);
       if (error) throw error;
@@ -85,14 +103,34 @@ const VoiceNotesSection = () => {
       await supabase.from('voice_notes').insert({ user_id: user.id, url: fileName });
       fetchVoiceNotes();
     } catch (err) {
+      setIsRecording(false);
       Alert.alert('Error', 'Failed to upload voice note.');
     }
     setUploading(false);
   };
 
   // Play a voice note
-  const playVoiceNote = (item: any) => {
-    setPlayingId(item.id);
+  const playVoiceNote = async (item: any) => {
+    try {
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+      }
+      setPlayingId(item.id);
+      const url = supabase.storage.from('meaz-storage').getPublicUrl(item.url).data.publicUrl;
+      const { sound: newSound } = await Audio.Sound.createAsync({ uri: url });
+      setSound(newSound);
+      await newSound.playAsync();
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setPlayingId(null);
+          newSound.unloadAsync();
+        }
+      });
+    } catch (err) {
+      setPlayingId(null);
+      Alert.alert('Error', 'Failed to play voice note.');
+    }
   };
 
   // Delete a voice note
@@ -142,15 +180,15 @@ const VoiceNotesSection = () => {
       >
         <View style={{ alignItems: 'center' }}>
           <ThemedText style={{ fontSize: 18, fontWeight: 'bold', color: 'white', marginBottom: 15 }}>
-            {audioRecorder.isRecording ? 'Recording...' : 'Ready to Record'}
+            {isRecording ? 'Recording...' : 'Ready to Record'}
           </ThemedText>
           {renderWaveform()}
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
             <TouchableOpacity 
               onPress={startRecording}
-              disabled={audioRecorder.isRecording || uploading}
+              disabled={isRecording || uploading}
               style={{
-                backgroundColor: audioRecorder.isRecording ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)',
+                backgroundColor: isRecording ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)',
                 width: 60,
                 height: 60,
                 borderRadius: 30,
@@ -161,15 +199,15 @@ const VoiceNotesSection = () => {
                 borderColor: 'rgba(255,255,255,0.5)',
               }}
             >
-              <Animated.View style={{ transform: [{ scale: audioRecorder.isRecording ? pulseAnim : 1 }] }}>
+              <Animated.View style={{ transform: [{ scale: isRecording ? pulseAnim : 1 }] }}>
                 <Ionicons name="mic" size={28} color="white" />
               </Animated.View>
             </TouchableOpacity>
             <TouchableOpacity 
               onPress={stopRecording}
-              disabled={!audioRecorder.isRecording || uploading}
+              disabled={!isRecording || uploading}
               style={{
-                backgroundColor: !audioRecorder.isRecording ? 'rgba(255,255,255,0.3)' : '#e74c3c',
+                backgroundColor: !isRecording ? 'rgba(255,255,255,0.3)' : '#e74c3c',
                 width: 60,
                 height: 60,
                 borderRadius: 30,
@@ -208,13 +246,8 @@ const VoiceNotesSection = () => {
                   elevation: 6,
                 }}
               >
-              <TouchableOpacity onPress={() => {
-                setPlayingId(item.id);
-                if (item.id === playingId) {
-                  player.playing ? player.pause() : player.play();
-                }
-              }} style={{ marginRight: 15 }}>
-                <Ionicons name={item.id === playingId && player.playing ? 'pause-circle' : 'play-circle'} size={28} color="white" />
+              <TouchableOpacity onPress={() => playVoiceNote(item)} style={{ marginRight: 15 }}>
+                <Ionicons name={item.id === playingId ? 'pause-circle' : 'play-circle'} size={28} color="white" />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
                   <ThemedText style={{ color: 'white', fontWeight: '600' }}>

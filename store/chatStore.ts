@@ -139,6 +139,7 @@ interface ChatStoreState extends ChatState {
   pinChat: (chatId: string) => Promise<void>;
   unpinChat: (chatId: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
+  addMessage: (chatId: string, dbMessage: DatabaseMessage) => void;
 }
 
 export const useChatStore = create<ChatStoreState>((set, get) => ({
@@ -821,7 +822,17 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   // Clear error
   clearError: () => {
     set({ error: null });
-  }
+  },
+
+  addMessage: (chatId: string, dbMessage: DatabaseMessage) => set(state => {
+    const newMessage = mapDatabaseMessageToMessage(dbMessage);
+    return {
+      messages: {
+        ...state.messages,
+        [chatId]: [newMessage, ...(state.messages[chatId] || [])]
+      }
+    };
+  })
 }));
 
 // Clean up expired messages periodically

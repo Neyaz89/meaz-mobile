@@ -7,8 +7,8 @@
     "reset-project": "node ./scripts/reset-project.js",
     "setup-database": "node ./scripts/setup-database.js",
     "fix-issues": "node ./scripts/run-fixes.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint"
   },
