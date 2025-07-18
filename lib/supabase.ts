@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import * as FileSystem from 'expo-file-system';
 
 // Use process.env for Expo/React Native
 const supabaseUrl = 'https://orupcxnygtgofvvwhpmz.supabase.co';
@@ -15,6 +16,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
+    flowType: 'pkce',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
   },
 });
 
@@ -1040,9 +1047,40 @@ export interface Database {
 
 // Helper functions for file uploads
 export const uploadFile = async (file: any, path: string) => {
+  try {
+    let fileData;
+    
+    // Handle different file input types
+    if (typeof file === 'string') {
+      // File URI from image picker
+      const fileInfo = await FileSystem.getInfoAsync(file);
+      if (!fileInfo.exists) {
+        throw new Error('File does not exist');
+      }
+      fileData = {
+        uri: file,
+        type: 'image/jpeg', // Default type
+        name: path.split('/').pop() || 'file',
+      };
+    } else if (file instanceof Blob) {
+      fileData = file;
+    } else if (file.uri) {
+      // File object with URI
+      fileData = {
+        uri: file.uri,
+        type: file.type || 'image/jpeg',
+        name: file.name || path.split('/').pop() || 'file',
+      };
+    } else {
+      fileData = file;
+    }
+    
   const { data, error } = await supabase.storage
     .from('meaz-storage')
-    .upload(path, file);
+      .upload(path, fileData, {
+        cacheControl: '3600',
+        upsert: true,
+      });
   
   if (error) throw error;
   
@@ -1051,6 +1089,10 @@ export const uploadFile = async (file: any, path: string) => {
     .getPublicUrl(path);
   
   return publicUrl;
+  } catch (error) {
+    console.error('Upload error:', error);
+    throw error;
+  }
 };
 
 export const deleteFile = async (path: string) => {
@@ -1059,6 +1101,26 @@ export const deleteFile = async (path: string) => {
     .remove([path]);
   
   if (error) throw error;
+};
+
+// Enhanced upload with retry logic
+export const uploadFileWithRetry = async (file: any, path: string, maxRetries = 3) => {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await uploadFile(file, path);
+    } catch (error) {
+      lastError = error;
+      console.warn(`Upload attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+  
+  throw lastError;
 };
 
 // Real-time subscriptions

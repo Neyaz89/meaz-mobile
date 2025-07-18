@@ -1,21 +1,24 @@
+import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-// Import stores
+// Import stores and hooks
 import { useRealTimeProfile } from './hooks/useRealTimeProfile';
 import { initializeAuth, useAuthStore } from './store/authStore';
 
-// Import screens
+// Import components
 import { ThemeProvider } from './components/ThemeContext';
 import { ThemedText } from './components/ThemedText';
 import { ThemedView } from './components/ThemedView';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ToastProvider } from './components/ui/ToastProvider';
+
+// Import screens
 import AuthScreen from './screens/AuthScreen';
 import ChatDetailScreen from './screens/ChatDetailScreen';
 import ChatsScreen from './screens/ChatsScreen';
@@ -28,13 +31,10 @@ import SettingsScreen from './screens/SettingsScreen';
 import SoloGamePlayScreen from './screens/SoloGamePlayScreen';
 import ActivitiesHubScreen from './screens/StatusScreen';
 
-// Import components
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const CallService: any = require('./components/call/CallService').default;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CallServiceAny: any = CallService;
 
-// Import icons
+// Import icons and hooks
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigationContainerRef } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
@@ -219,6 +219,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <ErrorBoundary>
         <ThemeProvider>
           <ToastProvider>
             <NavigationContainer
@@ -293,6 +294,7 @@ export default function App() {
             </NavigationContainer>
           </ToastProvider>
         </ThemeProvider>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

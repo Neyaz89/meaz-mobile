@@ -3,29 +3,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import FifteenPuzzle from '../components/activities/FifteenPuzzle';
-import FlappyBird from '../components/activities/FlappyBird';
-import Game2048 from '../components/activities/Game2048';
-import MemoryMatchGame from '../components/activities/MemoryMatchGame';
-import QuickQuiz from '../components/activities/QuickQuiz';
-import ReactionTimeGame from '../components/activities/ReactionTimeGame';
-import SimonSaysGame from '../components/activities/SimonSaysGame';
-import SnakeGame from '../components/activities/SnakeGame';
-import TapTheDot from '../components/activities/TapTheDot';
-import TypingSpeedTest from '../components/activities/TypingSpeedTest';
-
-const GAME_COMPONENTS = {
-  FlappyBird,
-  ReactionTimeGame,
-  MemoryMatchGame,
-  Game2048,
-  TapTheDot,
-  SnakeGame,
-  TypingSpeedTest,
-  SimonSaysGame,
-  FifteenPuzzle,
-  QuickQuiz,
-};
+import { LazyGameLoader } from '../components/common/LazyGameLoader';
 
 const GAME_TITLES = {
   FlappyBird: 'Flappy Bird',
@@ -45,10 +23,9 @@ const SoloGamePlayScreen = () => {
   const route = useRoute();
   // @ts-ignore
   const { game } = route.params || {};
-  const GameComponent = GAME_COMPONENTS[game];
   const title = GAME_TITLES[game] || 'Game';
 
-  if (!GameComponent) {
+  if (!game || !GAME_TITLES[game]) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Text>Game not found.</Text>
@@ -68,7 +45,7 @@ const SoloGamePlayScreen = () => {
         <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#222' }}>{title}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <GameComponent navigation={navigation} />
+        <LazyGameLoader gameType={game} navigation={navigation} />
       </View>
     </SafeAreaView>
   );

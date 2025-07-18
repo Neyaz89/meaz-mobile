@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { supabase, uploadFile } from '../lib/supabase';
+import { supabase, uploadFileWithRetry } from '../lib/supabase';
+import { runAfterInteractions } from '../utils/performance';
 
 // Types for media asset and post
 export interface MediaAsset {
@@ -80,9 +81,8 @@ export const usePostsStore = create<PostsState>((set, get) => ({
         const ext = asset.fileName ? asset.fileName.split('.').pop() : asset.uri.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
         const path = `posts/${user.id}/${fileName}`;
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const publicUrl = await uploadFile(blob, path);
+        
+        const publicUrl = await uploadFileWithRetry(asset.uri, path);
         uploadedMedia.push({ type: asset.type && asset.type.startsWith('video') ? 'video' : 'image', url: publicUrl });
       }
       // Optimistically add post
@@ -109,6 +109,11 @@ export const usePostsStore = create<PostsState>((set, get) => ({
         privacy,
       });
       if (error) throw error;
+      
+      // Refresh posts after successful upload
+      runAfterInteractions(() => {
+        get().fetchPosts();
+      });
       set({ isLoading: false });
     } catch (error: unknown) {
       set({ error: error instanceof Error ? error.message : String(error), isLoading: false });

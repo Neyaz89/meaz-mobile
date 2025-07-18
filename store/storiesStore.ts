@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { supabase } from '../lib/supabase';
+import { supabase, uploadFileWithRetry } from '../lib/supabase';
 import { StoriesState, Story, StoryContent } from '../types';
+import { runAfterInteractions } from '../utils/performance';
 
 export const useStoriesStore = create<StoriesState>((set, get) => ({
   stories: [],
@@ -139,11 +140,27 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) throw new Error('User not authenticated');
 
+      // Upload media content first
+      const uploadedContent = await Promise.all(
+        content.map(async (item) => {
+          if (item.type === 'image' || item.type === 'video') {
+            const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            const path = `stories/${user.id}/${fileName}`;
+            const publicUrl = await uploadFileWithRetry(item.url || '', path);
+            return {
+              ...item,
+              url: publicUrl,
+            };
+          }
+          return item;
+        })
+      );
+
       const { data: story, error } = await supabase
         .from('stories')
         .insert({
           user_id: user.id,
-          content,
+          content: uploadedContent,
           privacy,
           is_highlight: options?.isHighlight || false,
           highlight_title: options?.highlightTitle,
@@ -178,6 +195,11 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
       set(state => ({
         myStories: [newStory, ...state.myStories]
       }));
+      
+      // Refresh stories after successful creation
+      runAfterInteractions(() => {
+        get().loadFriendsStories();
+      });
     } catch (error: unknown) {
       set({ error: error instanceof Error ? error.message : String(error) });
       throw error;
@@ -489,4 +511,4 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
       .subscribe();
     return channel;
   },
-})); 
+}));
