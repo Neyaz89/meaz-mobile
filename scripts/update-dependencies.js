@@ -13,12 +13,15 @@ const updatedPackageJson = {
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
+    "dev": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "setup-database": "node ./scripts/setup-database.js",
+    "fix-issues": "node ./scripts/run-fixes.js",
+    "update-deps": "node ./scripts/update-dependencies.js",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint",
-    "update-deps": "node ./scripts/update-dependencies.js"
+    "lint": "expo lint"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
@@ -34,30 +37,39 @@ const updatedPackageJson = {
     "@react-navigation/native-stack": "^7.3.21",
     "@react-navigation/stack": "^7.4.2",
     "@supabase/supabase-js": "^2.39.7",
+    "agora-token": "^2.0.5",
+    "date-fns": "^4.1.0",
     "expo": "^53.0.17",
     "expo-audio": "^0.4.8",
+    "expo-av": "~15.1.7",
     "expo-blur": "~14.1.5",
     "expo-camera": "~16.1.10",
+    "expo-clipboard": "~7.1.5",
     "expo-constants": "~17.1.7",
     "expo-contacts": "~14.2.5",
+    "expo-device": "~7.1.4",
     "expo-document-picker": "^13.1.6",
     "expo-file-system": "~18.1.11",
-    "expo-font": "~13.3.1",
+    "expo-font": "~13.3.2",
     "expo-haptics": "~14.1.4",
     "expo-image": "~2.3.2",
     "expo-image-picker": "~16.1.4",
+    "expo-linear-gradient": "~14.1.5",
     "expo-linking": "~7.1.7",
-    "expo-notifications": "~0.31.3",
+    "expo-notifications": "~0.31.4",
+    "expo-router": "^5.1.3",
     "expo-sharing": "~13.1.5",
     "expo-speech": "~13.1.7",
     "expo-splash-screen": "^0.30.10",
     "expo-status-bar": "~2.2.3",
     "expo-symbols": "~0.4.5",
     "expo-system-ui": "~5.0.9",
+    "expo-video": "^2.2.2",
     "expo-web-browser": "~14.2.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
+    "react-native-agora": "^4.5.3",
     "react-native-animatable": "^1.4.0",
     "react-native-confetti-cannon": "^1.5.2",
     "react-native-emoji-selector": "^0.2.0",
@@ -66,6 +78,7 @@ const updatedPackageJson = {
     "react-native-glassmorphism": "^1.0.1",
     "react-native-image-viewing": "^0.3.0",
     "react-native-modal": "^14.0.0-rc.1",
+    "react-native-qrcode-svg": "^6.3.15",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "^5.4.0",
     "react-native-screens": "~4.11.1",
@@ -87,15 +100,14 @@ const updatedPackageJson = {
   "private": true
 };
 
-// Commands to run
+// Commands to run with --yes flags to avoid interactive prompts
 const commands = [
   'npm cache clean --force',
   'rm -rf node_modules',
   'rm -rf package-lock.json',
-  'npm install',
-  'npx expo install --fix',
-  'npm audit fix',
-  'npm run lint'
+  'npm install --yes',
+  'npx expo install --fix --yes',
+  'npm audit fix --yes'
 ];
 
 try {
@@ -121,6 +133,7 @@ try {
     } catch (error) {
       console.log(`⚠️  Command failed: ${command}`);
       console.log(`Error: ${error.message}\n`);
+      // Continue with other commands even if one fails
     }
   });
 
@@ -129,9 +142,8 @@ try {
   console.log('1. Test the app with: npm start');
   console.log('2. Run on device: npm run android or npm run ios');
   console.log('3. Check for any breaking changes in the updated packages');
-  console.log('4. Update any deprecated API usage if needed');
 
 } catch (error) {
   console.error('❌ Error updating dependencies:', error);
   process.exit(1);
-} 
+}
