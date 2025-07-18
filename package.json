@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
+    "dev": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "setup-database": "node ./scripts/setup-database.js",
     "fix-issues": "node ./scripts/run-fixes.js",
