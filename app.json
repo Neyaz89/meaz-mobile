@@ -2,12 +2,13 @@
   "expo": {
     "name": "Meaz",
     "slug": "meaz-mobile-v2",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "meazmobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": "1.0.1",
     "ios": {
       "supportsTablet": true
     },
@@ -18,6 +19,18 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_CONTACTS",
+        "android.permission.VIBRATE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK"
+      ],
       "manifest": {
         "application": {
           "tools:replace": "android:appComponentFactory"
@@ -36,6 +49,17 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0",
+            "minSdkVersion": 23
+          }
         }
       ]
     ],
